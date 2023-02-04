@@ -1,5 +1,5 @@
 #! /usr/bin/env python3
-from bs4 import BeautifulSoup
+from pyPodcastParser.Podcast import Podcast as pyPodcast
 import requests
 import logging
 log = logging.getLogger(__name__)
@@ -8,16 +8,23 @@ log.addHandler(logging.NullHandler())
 class Podcast:
     def __init__(self, url):
         self.url = url  # feed url of podcast 
+        self.__fetchFeed() # fetch feed
         self.title = self.__getTitle() # title of podcast
         self.epList = [] # a list of all episodes
         self.refreshFeed() # reads feed and populates the episode list
 
+    def __fetchFeed(self):
+        try:
+            r = requests.get(self.url)
+            self.feed_content = r.content
+        except Exception as e:
+            log.error(f'failed to download feed from URL: %s Error: %e', self.url, e)
+
     def __getTitle(self):
     # extract title of podcast from feed
         try:
-            r = requests.get(self.url)
-            soup = BeautifulSoup(r.content, features='xml')
-            return soup.find('title').text        
+            p = pyPodcast(self.feed_content)
+            return p.title
         except Exception as e:
             log.error(f'failed reading podcast name: %e', e)
             return ""
@@ -25,15 +32,13 @@ class Podcast:
     def refreshFeed(self):
     # reads feed and populates the episode list
         try:
-            r = requests.get(self.url)
-            soup = BeautifulSoup(r.content, features='xml')
-            items = soup.findAll('item')        
-            for i in items:
-                _t = i.find('title').text
-                _url = i.find('enclosure').attrs['url']
-                _pd = i.find('pubDate').text 
-                _dur = i.find('duration').text
-                _guid = i.find('guid').text
+            p = pyPodcast(self.feed_content)
+            for i in p.items:
+                _t = i.title
+                _url = i.enclosure_url
+                _pd = i.published_date 
+                _dur = i.itunes_duration
+                _guid = i.guid
                 eObj = Episode(self.title, _t, _url, _pd, _dur, _guid)
                 self.epList.append(eObj)
             log.info(f'%s: feed refreshed, %s episodes found.', self.title, len(items) )
